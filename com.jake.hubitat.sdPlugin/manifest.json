@@ -83,6 +83,40 @@
           "Title": "Shade"
         }
       ]
+    },
+    {
+      "UUID": "com.jake.hubitat.sensor.action",
+      "Name": "Sensor Display",
+      "Icon": "imgs/sensor_generic",
+      "Tooltip": "Display a sensor attribute value with an appropriate icon",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/sensor_generic",
+          "TitleAlignment": "bottom",
+          "FontSize": "16",
+          "Title": "Sensor"
+        }
+      ]
+    },
+    {
+      "UUID": "com.jake.hubitat.weather.current",
+      "Name": "Weather",
+      "Icon": "imgs/sensor_temperature",
+      "Tooltip": "Display current conditions, temperature, humidity, today forecast, and NWS alerts",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/transparent",
+          "TitleAlignment": "middle",
+          "FontSize": "11",
+          "Title": "Weather"
+        }
+      ]
     }
   ],
   "OS": [

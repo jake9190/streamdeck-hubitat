@@ -65,3 +65,27 @@ export function getShadeImage(shadeState: string): string {
 			return "shade_unknown";
 	}
 }
+
+/** Get the appropriate icon image name for a sensor attribute type. */
+export function getSensorImage(attribute: string): string {
+	switch (attribute) {
+		case "temperature":
+			return "sensor_temperature";
+		case "humidity":
+			return "sensor_humidity";
+		case "power":
+			return "sensor_power";
+		case "energy":
+			return "sensor_energy";
+		case "battery":
+			return "sensor_battery";
+		case "illuminance":
+			return "sensor_illuminance";
+		case "motion":
+			return "sensor_motion";
+		case "contact":
+			return "sensor_contact";
+		default:
+			return "sensor_generic";
+	}
+}

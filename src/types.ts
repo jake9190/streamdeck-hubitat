@@ -35,6 +35,19 @@ export interface WindowShadeSettings {
 	device: string;
 }
 
+/** Settings for the Sensor Display action. */
+export interface SensorSettings {
+	[key: string]: JsonValue;
+	device: string;
+	attribute: string;
+}
+
+/** Settings for the Weather action. */
+export interface WeatherCurrentSettings {
+	[key: string]: JsonValue;
+	device: string;
+}
+
 /** Tracked state for an action instance (button on the deck). */
 export interface InstanceState {
 	switchState: "on" | "off" | "unknown";

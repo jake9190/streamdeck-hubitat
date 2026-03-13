@@ -174,6 +174,20 @@ class HubitatService {
 		}
 	}
 
+	/** Fetch the list of attributes for a specific device. */
+	async getDeviceAttributes(hostname: string, accessToken: string, deviceId: string): Promise<{ name: string; currentValue: string | number | null }[]> {
+		const url = `${hostname}/devices/${encodeURIComponent(deviceId)}?access_token=${encodeURIComponent(accessToken)}`;
+		try {
+			const response = await fetch(url);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const data = (await response.json()) as DeviceResponse;
+			return data.attributes.map((a) => ({ name: a.name, currentValue: a.currentValue }));
+		} catch (err) {
+			streamDeck.logger.error(`HubitatService: getDeviceAttributes failed for device ${deviceId}: ${err}`);
+			return [];
+		}
+	}
+
 	/**
 	 * Reset the heartbeat watchdog timer. If no message arrives within
 	 * HEARTBEAT_TIMEOUT ms, force-close the connection to trigger reconnect.

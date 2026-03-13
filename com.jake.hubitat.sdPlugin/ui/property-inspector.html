@@ -85,6 +85,20 @@
 		<div id="windowShadeOptions" class="hidden">
 			<div class="hint">Press: close shade (or stop if moving). Double-click: open shade.</div>
 		</div>
+
+		<div id="sensorOptions" class="hidden">
+			<div class="field">
+				<label>Attribute</label>
+				<select id="attributeSelect">
+					<option value="" disabled selected>Select a device first</option>
+				</select>
+			</div>
+			<div class="hint">Displays the selected attribute value on the button with an appropriate icon.</div>
+		</div>
+
+		<div id="weatherOptions" class="hidden">
+			<div class="hint">Displays current conditions (emoji), temperature, humidity, today's high/low, and a red alert indicator for NWS warnings. Select your WeatherFlow Tempest device.</div>
+		</div>
 	</details>
 
 	<div id="debugLog"></div>
@@ -202,6 +216,8 @@
 
 			actionSettings.startingLevel = document.getElementById('startingLevelSelect').value;
 
+			actionSettings.attribute = document.getElementById('attributeSelect').value;
+
 			if (websocket && websocket.readyState === WebSocket.OPEN) {
 				const msg = {
 					event: "setSettings",
@@ -243,6 +259,10 @@
 			if (actionSettings.startingLevel) {
 				document.getElementById('startingLevelSelect').value = actionSettings.startingLevel;
 			}
+
+			if (actionSettings.attribute) {
+				document.getElementById('attributeSelect').value = actionSettings.attribute;
+			}
 		}
 
 		// --- Event listeners for inputs ---
@@ -252,9 +272,14 @@
 		document.getElementById('deviceSelect').addEventListener('change', function() {
 			debugLog('[PI] deviceSelect changed to: ' + this.value);
 			saveActionSettings();
+			// For sensor actions, request attributes when device changes
+			if (currentActionUUID === 'com.jake.hubitat.sensor.action' && this.value) {
+				sendToPlugin({ command: 'getAttributes', deviceId: this.value });
+			}
 		});
 		document.getElementById('levelSelect').addEventListener('change', saveActionSettings);
 		document.getElementById('startingLevelSelect').addEventListener('change', saveActionSettings);
+		document.getElementById('attributeSelect').addEventListener('change', saveActionSettings);
 
 		document.querySelectorAll('input[name="action"]').forEach(function(r) {
 			r.addEventListener('change', function() {
@@ -288,9 +313,16 @@
 			if (payload.command === "deviceList") {
 				debugLog('[PI] Got ' + (payload.devices?.length ?? 0) + ' devices');
 				populateDeviceSelect(payload.devices);
+				// For sensor actions, request attributes if a device is already selected
+				if (currentActionUUID === 'com.jake.hubitat.sensor.action' && actionSettings.device) {
+					sendToPlugin({ command: 'getAttributes', deviceId: actionSettings.device });
+				}
 				// Mark as initialized AFTER devices are loaded and settings applied
 				initialized = true;
 				debugLog('[PI] Initialized - ready for user input');
+			} else if (payload.command === "attributeList") {
+				debugLog('[PI] Got ' + (payload.attributes?.length ?? 0) + ' attributes');
+				populateAttributeSelect(payload.attributes);
 			} else if (payload.command === "error") {
 				const select = document.getElementById("deviceSelect");
 				select.innerHTML = '<option value="" disabled selected>' + escapeHtml(payload.message) + '</option>';
@@ -335,13 +367,43 @@
 			}
 		}
 
+		function populateAttributeSelect(attributes) {
+			const select = document.getElementById("attributeSelect");
+			const currentValue = actionSettings.attribute || '';
+			select.innerHTML = '';
+
+			if (!attributes || attributes.length === 0) {
+				select.innerHTML = '<option value="" disabled selected>No attributes found</option>';
+				return;
+			}
+
+			select.innerHTML = '<option value="">Select an attribute...</option>';
+			for (const attr of attributes) {
+				const option = document.createElement("option");
+				option.value = attr.name;
+				const displayValue = attr.currentValue != null ? ' (' + attr.currentValue + ')' : '';
+				option.textContent = attr.name + displayValue;
+				if (attr.name === currentValue) option.selected = true;
+				select.appendChild(option);
+			}
+
+			if (currentValue) {
+				select.value = currentValue;
+				debugLog('[PI] Re-applied saved attribute selection: ' + currentValue);
+			}
+		}
+
 		function showActionOptions(actionUUID) {
 			const s = document.getElementById("setSwitchOptions");
 			const m = document.getElementById("multiDimmerOptions");
 			const w = document.getElementById("windowShadeOptions");
+			const n = document.getElementById("sensorOptions");
+			const wx = document.getElementById("weatherOptions");
 			if (s) s.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.setswitch.action");
 			if (m) m.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.multidimmer.action");
 			if (w) w.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.windowshade.action");
+			if (n) n.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.sensor.action");
+			if (wx) wx.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.weather.current");
 		}
 
 		function toggleSetLevelOptions(show) {

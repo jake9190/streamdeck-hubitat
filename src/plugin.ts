@@ -4,8 +4,10 @@ import { ToggleSwitch } from "./actions/toggle-switch";
 import { SetSwitch } from "./actions/set-switch";
 import { MultiDimmer } from "./actions/multi-dimmer";
 import { WindowShade } from "./actions/window-shade";
+import { SensorDisplay } from "./actions/sensor-display";
+import { WeatherCurrent } from "./actions/weather-current";
 import { hubitatService } from "./hubitat-service";
-import { handleDeviceEvent, setGlobalSettings, setActionRef, setActionDevice, getInstanceState, updateInstanceImage, getGlobalSettings as getCachedGlobalSettings } from "./plugin-state";
+import { handleDeviceEvent, setGlobalSettings, setActionRef, setActionDevice, getInstanceState, updateInstanceImage, getGlobalSettings as getCachedGlobalSettings, isCompositeOrSensor } from "./plugin-state";
 import type { GlobalSettings, HubitatDeviceEvent } from "./types";
 
 // Register all actions
@@ -13,6 +15,8 @@ streamDeck.actions.registerAction(new ToggleSwitch());
 streamDeck.actions.registerAction(new SetSwitch());
 streamDeck.actions.registerAction(new MultiDimmer());
 streamDeck.actions.registerAction(new WindowShade());
+streamDeck.actions.registerAction(new SensorDisplay());
+streamDeck.actions.registerAction(new WeatherCurrent());
 
 // When global settings are received/updated, connect the Hubitat WebSocket
 streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev: DidReceiveGlobalSettingsEvent<GlobalSettings>) => {
@@ -39,6 +43,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev: DidReceiveGl
 				if (typeof device === "string" && device) {
 					setActionRef(action.id, action);
 					setActionDevice(action.id, device);
+					if (isCompositeOrSensor(action.id)) return;
 					try {
 						const result = await hubitatService.pollDevice(settings.hostname, settings.access_token, device);
 						const state = getInstanceState(action.id);
@@ -60,9 +65,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev: DidReceiveGl
 // Route Hubitat WebSocket events to action instances
 hubitatService.onDeviceEvent(async (event: HubitatDeviceEvent) => {
 	streamDeck.logger.debug(`[HubitatWS] Event: name=${event.name} deviceId=${event.deviceId} value=${event.value}`);
-	if (event.name === "switch" || event.name === "level" || event.name === "windowShade" || event.name === "position") {
-		await handleDeviceEvent(String(event.deviceId), event.name, event.value);
-	}
+	await handleDeviceEvent(String(event.deviceId), event.name, event.value);
 });
 
 // Handle messages from the Property Inspector (e.g., device list requests)
@@ -70,7 +73,15 @@ streamDeck.ui.onSendToPlugin(async (ev: SendToPluginEvent<JsonValue, JsonObject>
 	const message = ev.payload as { command?: string };
 	streamDeck.logger.info(`[PI→Plugin] Received message: ${JSON.stringify(message)}`);
 
-	if (message.command === "getDevices") {
+	if (message.command === "getAttributes") {
+		const deviceId = (ev.payload as { deviceId?: string }).deviceId;
+		const settings = getCachedGlobalSettings();
+		if (settings.hostname && settings.access_token && deviceId) {
+			const attributes = await hubitatService.getDeviceAttributes(settings.hostname, settings.access_token, deviceId);
+			streamDeck.logger.info(`[PI→Plugin] Got ${attributes.length} attributes for device ${deviceId}`);
+			await streamDeck.ui.sendToPropertyInspector({ command: "attributeList", attributes });
+		}
+	} else if (message.command === "getDevices") {
 		const settings = getCachedGlobalSettings();
 		streamDeck.logger.info(`[PI→Plugin] Global settings: hostname=${settings.hostname ? "set" : "EMPTY"}, access_token=${settings.access_token ? "set" : "EMPTY"}`);
 		if (settings.hostname && settings.access_token) {
@@ -121,6 +132,9 @@ streamDeck.settings.onDidReceiveSettings(async (ev: DidReceiveSettingsEvent) => 
 	if (settings && typeof settings.device === "string" && settings.device) {
 		setActionRef(ev.action.id, ev.action);
 		setActionDevice(ev.action.id, settings.device);
+
+		// Skip pollDevice/updateInstanceImage for composite and sensor actions
+		if (isCompositeOrSensor(ev.action.id)) return;
 
 		// Poll device and update button image
 		const global = getCachedGlobalSettings();
