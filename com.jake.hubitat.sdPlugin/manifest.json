@@ -1,0 +1,101 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.jake.hubitat",
+  "Name": "Hubitat Integration",
+  "Version": "2.0.0.0",
+  "Author": "jake",
+  "Description": "This plugin allows Stream Deck to interact with Hubitat via the Maker API",
+  "Icon": "imgs/hubitat_logo",
+  "URL": "https://github.com/jake9190/streamdeck-hubitat",
+  "Category": "Hubitat",
+  "CategoryIcon": "imgs/category",
+  "CodePath": "bin/plugin.js",
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "SDKVersion": 2,
+  "Actions": [
+    {
+      "UUID": "com.jake.hubitat.toggleswitch.action",
+      "Name": "Toggle Switch",
+      "Icon": "imgs/toggle",
+      "Tooltip": "This action toggles a switch",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/light_gray",
+          "TitleAlignment": "bottom",
+          "FontSize": "12",
+          "Title": "Switch"
+        }
+      ]
+    },
+    {
+      "UUID": "com.jake.hubitat.setswitch.action",
+      "Name": "Set Switch",
+      "Icon": "imgs/toggle",
+      "Tooltip": "This action sets the state of a switch",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/light_gray",
+          "TitleAlignment": "bottom",
+          "FontSize": "12",
+          "Title": "Switch"
+        }
+      ]
+    },
+    {
+      "UUID": "com.jake.hubitat.multidimmer.action",
+      "Name": "Multi-Action Dimmer",
+      "Icon": "imgs/toggle",
+      "Tooltip": "Press to brighten, double-click to dim, hold to turn off",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/light_gray",
+          "TitleAlignment": "bottom",
+          "FontSize": "12",
+          "Title": "Switch"
+        }
+      ]
+    },
+    {
+      "UUID": "com.jake.hubitat.windowshade.action",
+      "Name": "Window Shade",
+      "Icon": "imgs/shade_unknown",
+      "Tooltip": "Single press to close (or stop if moving), double-press to open",
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/shade_unknown",
+          "TitleAlignment": "bottom",
+          "FontSize": "12",
+          "Title": "Shade"
+        }
+      ]
+    }
+  ],
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.11"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "6.6"
+  }
+}

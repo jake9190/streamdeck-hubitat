@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Hubitat Property Inspector</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			font-size: 12px;
+			color: #ccc;
+			background: transparent;
+			margin: 0;
+			padding: 8px;
+		}
+		.hidden { display: none !important; }
+		details { margin-bottom: 8px; }
+		summary { font-weight: bold; cursor: pointer; margin-bottom: 6px; }
+		.field { display: flex; align-items: center; margin-bottom: 6px; }
+		.field label { min-width: 100px; color: #999; }
+		.field input, .field select { flex: 1; background: #2a2a2a; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 4px 6px; font-size: 12px; }
+		.field input:focus, .field select:focus { border-color: #0078d4; outline: none; }
+		.radio-group { display: flex; gap: 8px; flex: 1; }
+		.radio-group label { min-width: auto; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+		.hint { color: #777; font-size: 11px; padding: 2px 0 4px 100px; }
+		#debugLog { display: none; }
+	</style>
+</head>
+<body>
+	<details open>
+		<summary>Global Settings</summary>
+		<div class="field">
+			<label>API URL</label>
+			<input type="text" id="hostname" placeholder="http://192.168.1.2/apps/api/229" />
+		</div>
+		<div class="field">
+			<label>Access Token</label>
+			<input type="text" id="access_token" placeholder="Your Maker API access token" />
+		</div>
+	</details>
+
+	<details open>
+		<summary>Button Settings</summary>
+		<div class="field">
+			<label>Device</label>
+			<select id="deviceSelect">
+				<option value="" disabled selected>Loading devices...</option>
+			</select>
+		</div>
+
+		<div id="setSwitchOptions" class="hidden">
+			<div class="field">
+				<label>Action</label>
+				<div class="radio-group">
+					<label><input type="radio" name="action" value="on" /> On</label>
+					<label><input type="radio" name="action" value="off" /> Off</label>
+					<label><input type="radio" name="action" value="setLevel" /> Set Level</label>
+				</div>
+			</div>
+			<div id="setLevelOptions" class="hidden">
+				<div class="field">
+					<label>Level (%)</label>
+					<select id="levelSelect"></select>
+				</div>
+				<div class="field">
+					<label>Also set On/Off?</label>
+					<div class="radio-group">
+						<label><input type="radio" name="subAction" value="on" /> On</label>
+						<label><input type="radio" name="subAction" value="off" /> Off</label>
+						<label><input type="radio" name="subAction" value="none" /> Just Level</label>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div id="multiDimmerOptions" class="hidden">
+			<div class="field">
+				<label>Level when Pressed</label>
+				<select id="startingLevelSelect">
+					<option value="-1">Don't Change</option>
+				</select>
+			</div>
+			<div class="hint">Press: turn on / increase brightness. Hold: turn off. Double-click: decrease brightness.</div>
+		</div>
+
+		<div id="windowShadeOptions" class="hidden">
+			<div class="hint">Press: close shade (or stop if moving). Double-click: open shade.</div>
+		</div>
+	</details>
+
+	<div id="debugLog"></div>
+
+	<script>
+		function debugLog(msg) {
+			console.log(msg);
+		}
+
+		let websocket = null;
+		let piUUID = null;
+		let currentActionContext = null;
+		let currentActionUUID = null;
+		let globalSettings = {};
+		let actionSettings = {};
+		let initialized = false;
+
+		// Stream Deck calls this global function when the PI is ready
+		window.connectElgatoStreamDeckSocket = function(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+			debugLog('[PI] connectElgatoStreamDeckSocket called');
+
+			piUUID = inUUID;
+
+			const actionInfo = JSON.parse(inActionInfo);
+			currentActionContext = actionInfo.context;
+			currentActionUUID = actionInfo.action;
+			actionSettings = actionInfo.payload?.settings || {};
+
+			debugLog('[PI] Action: ' + currentActionUUID);
+			debugLog('[PI] piUUID: ' + piUUID);
+			debugLog('[PI] actionContext: ' + currentActionContext);
+			debugLog('[PI] Initial actionSettings: ' + JSON.stringify(actionSettings));
+
+			showActionOptions(currentActionUUID);
+			populateLevelSelects();
+
+			websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+
+			websocket.onopen = function() {
+				debugLog('[PI] WebSocket connected');
+				websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+
+				// Request global settings so we can populate fields
+				websocket.send(JSON.stringify({ event: "getGlobalSettings", context: inUUID }));
+			};
+
+			websocket.onmessage = function(evt) {
+				const data = JSON.parse(evt.data);
+				debugLog('[PI] Event: ' + data.event + ' ' + JSON.stringify(data).substring(0, 200));
+
+				switch (data.event) {
+					case "didReceiveGlobalSettings":
+						globalSettings = data.payload?.settings || {};
+						loadGlobalSettingsUI();
+						break;
+
+				case "didReceiveSettings":
+					{
+						const incoming = data.payload?.settings || {};
+						// Only update if incoming has actual content (avoid empty echo overwriting initial settings)
+						if (Object.keys(incoming).length > 0) {
+							actionSettings = incoming;
+							debugLog('[PI] didReceiveSettings: ' + JSON.stringify(actionSettings));
+							loadActionSettingsUI();
+						} else {
+							debugLog('[PI] Ignoring empty didReceiveSettings');
+						}
+					}
+					break;
+
+					case "sendToPropertyInspector":
+						handlePluginMessage(data.payload);
+						break;
+				}
+			};
+
+			websocket.onerror = function() { debugLog('[PI] WebSocket error'); };
+			websocket.onclose = function() { debugLog('[PI] WebSocket closed'); };
+
+			// Load action settings from actionInfo into UI
+			loadActionSettingsUI();
+		};
+
+		// --- Settings persistence ---
+
+		function saveGlobalSettings() {
+			globalSettings.hostname = document.getElementById('hostname').value;
+			globalSettings.access_token = document.getElementById('access_token').value;
+			if (websocket && websocket.readyState === WebSocket.OPEN) {
+				const msg = {
+					event: "setGlobalSettings",
+					context: piUUID,
+					payload: globalSettings
+				};
+				debugLog('[PI] Sending setGlobalSettings: ' + JSON.stringify(msg));
+				websocket.send(JSON.stringify(msg));
+			}
+		}
+
+		function saveActionSettings() {
+			if (!initialized) {
+				debugLog('[PI] saveActionSettings skipped (not initialized)');
+				return;
+			}
+
+			actionSettings.device = document.getElementById('deviceSelect').value;
+
+			const actionRadio = document.querySelector('input[name="action"]:checked');
+			if (actionRadio) actionSettings.action = actionRadio.value;
+
+			actionSettings.level = document.getElementById('levelSelect').value;
+
+			const subActionRadio = document.querySelector('input[name="subAction"]:checked');
+			if (subActionRadio) actionSettings.subAction = subActionRadio.value;
+
+			actionSettings.startingLevel = document.getElementById('startingLevelSelect').value;
+
+			if (websocket && websocket.readyState === WebSocket.OPEN) {
+				const msg = {
+					event: "setSettings",
+					context: piUUID,
+					payload: actionSettings
+				};
+				debugLog('[PI] Sending setSettings: ' + JSON.stringify(msg));
+				websocket.send(JSON.stringify(msg));
+			} else {
+				debugLog('[PI] Cannot save - WebSocket not open');
+			}
+		}
+
+		function loadGlobalSettingsUI() {
+			document.getElementById('hostname').value = globalSettings.hostname || '';
+			document.getElementById('access_token').value = globalSettings.access_token || '';
+		}
+
+		function loadActionSettingsUI() {
+			if (actionSettings.device) {
+				document.getElementById('deviceSelect').value = actionSettings.device;
+			}
+
+			if (actionSettings.action) {
+				const radio = document.querySelector('input[name="action"][value="' + actionSettings.action + '"]');
+				if (radio) radio.checked = true;
+				toggleSetLevelOptions(actionSettings.action === 'setLevel');
+			}
+
+			if (actionSettings.level) {
+				document.getElementById('levelSelect').value = actionSettings.level;
+			}
+
+			if (actionSettings.subAction) {
+				const radio = document.querySelector('input[name="subAction"][value="' + actionSettings.subAction + '"]');
+				if (radio) radio.checked = true;
+			}
+
+			if (actionSettings.startingLevel) {
+				document.getElementById('startingLevelSelect').value = actionSettings.startingLevel;
+			}
+		}
+
+		// --- Event listeners for inputs ---
+
+		document.getElementById('hostname').addEventListener('change', saveGlobalSettings);
+		document.getElementById('access_token').addEventListener('change', saveGlobalSettings);
+		document.getElementById('deviceSelect').addEventListener('change', function() {
+			debugLog('[PI] deviceSelect changed to: ' + this.value);
+			saveActionSettings();
+		});
+		document.getElementById('levelSelect').addEventListener('change', saveActionSettings);
+		document.getElementById('startingLevelSelect').addEventListener('change', saveActionSettings);
+
+		document.querySelectorAll('input[name="action"]').forEach(function(r) {
+			r.addEventListener('change', function() {
+				toggleSetLevelOptions(this.value === 'setLevel');
+				saveActionSettings();
+			});
+		});
+		document.querySelectorAll('input[name="subAction"]').forEach(function(r) {
+			r.addEventListener('change', saveActionSettings);
+		});
+
+		// --- Custom plugin messaging ---
+
+		function sendToPlugin(payload) {
+			if (websocket && websocket.readyState === WebSocket.OPEN) {
+				const msg = {
+					action: currentActionUUID,
+					event: "sendToPlugin",
+					context: piUUID,
+					payload: payload
+				};
+				debugLog('[PI] Sending sendToPlugin: ' + JSON.stringify(msg));
+				websocket.send(JSON.stringify(msg));
+			} else {
+				debugLog('[PI] Cannot send - not connected');
+			}
+		}
+
+		function handlePluginMessage(payload) {
+			debugLog('[PI] Plugin message: ' + JSON.stringify(payload));
+			if (payload.command === "deviceList") {
+				debugLog('[PI] Got ' + (payload.devices?.length ?? 0) + ' devices');
+				populateDeviceSelect(payload.devices);
+				// Mark as initialized AFTER devices are loaded and settings applied
+				initialized = true;
+				debugLog('[PI] Initialized - ready for user input');
+			} else if (payload.command === "error") {
+				const select = document.getElementById("deviceSelect");
+				select.innerHTML = '<option value="" disabled selected>' + escapeHtml(payload.message) + '</option>';
+				initialized = true;
+			}
+		}
+
+		// --- UI helpers ---
+
+		function populateDeviceSelect(devices) {
+			const select = document.getElementById("deviceSelect");
+			const currentValue = actionSettings.device || '';
+			select.innerHTML = '';
+
+			if (!devices || devices.length === 0) {
+				select.innerHTML = '<option value="" disabled selected>No devices found</option>';
+				return;
+			}
+
+			select.innerHTML = '<option value="">Select a device...</option>';
+			for (const device of devices) {
+				const option = document.createElement("option");
+				option.value = device.id;
+				option.textContent = device.name;
+				if (String(device.id) === String(currentValue)) option.selected = true;
+				select.appendChild(option);
+			}
+
+			// Re-apply saved selection now that options exist
+			if (currentValue) {
+				select.value = String(currentValue);
+				debugLog('[PI] Re-applied saved device selection: ' + currentValue);
+			}
+		}
+
+		function populateLevelSelects() {
+			const levelSelect = document.getElementById("levelSelect");
+			const startingLevelSelect = document.getElementById("startingLevelSelect");
+			for (let i = 1; i <= 100; i++) {
+				levelSelect.appendChild(new Option(String(i), String(i)));
+				startingLevelSelect.appendChild(new Option(String(i), String(i)));
+			}
+		}
+
+		function showActionOptions(actionUUID) {
+			const s = document.getElementById("setSwitchOptions");
+			const m = document.getElementById("multiDimmerOptions");
+			const w = document.getElementById("windowShadeOptions");
+			if (s) s.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.setswitch.action");
+			if (m) m.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.multidimmer.action");
+			if (w) w.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.windowshade.action");
+		}
+
+		function toggleSetLevelOptions(show) {
+			const el = document.getElementById("setLevelOptions");
+			if (el) el.classList.toggle("hidden", !show);
+		}
+
+		function escapeHtml(text) {
+			const div = document.createElement("div");
+			div.textContent = text;
+			return div.innerHTML;
+		}
+
+		debugLog('[PI] Loaded, waiting for Stream Deck...');
+	</script>
+</body>
+</html>
