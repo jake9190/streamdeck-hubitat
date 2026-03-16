@@ -168,9 +168,9 @@ export class WeatherCurrent extends SingletonAction<WeatherCurrentSettings> {
 		const size = 144;
 		const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
 			<rect width="${size}" height="${size}" rx="12"/>
-			<text x="72" y="58" text-anchor="middle" font-size="50" fill="${emojiColor}">${emoji}${alert}</text>
+			<text x="72" y="48" text-anchor="middle" font-size="56" fill="${emojiColor}">${emoji}${alert}</text>
 			<text x="72" y="90" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" fill="white" font-weight="bold">${temp}° ${humidity}%</text>
-			<text x="72" y="118" text-anchor="middle" font-family="Arial,sans-serif" font-size="26" fill="#f0f0f0">↑${todayHi}° ↓${tomorrowLo}°</text>
+			<text x="72" y="130" text-anchor="middle" font-family="Arial,sans-serif" font-size="26" fill="#f0f0f0">↑${todayHi}° ↓${tomorrowLo}°</text>
 		</svg>`;
 
 		const base64 = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
