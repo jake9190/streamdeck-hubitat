@@ -68,6 +68,43 @@ hubitatService.onDeviceEvent(async (event: HubitatDeviceEvent) => {
 	await handleDeviceEvent(String(event.deviceId), event.name, event.value);
 });
 
+// After a WebSocket reconnect (e.g. sleep/wake), re-poll all visible actions
+// so stale data is refreshed immediately without waiting for new events.
+hubitatService.onReconnect(async () => {
+	const settings = getCachedGlobalSettings();
+	if (!settings.hostname || !settings.access_token) return;
+	streamDeck.logger.info("[reconnect] Re-polling all visible actions after WebSocket reconnect");
+
+	for (const action of streamDeck.actions) {
+		const s = await action.getSettings();
+		const device = (s as Record<string, unknown>)?.device;
+		if (typeof device !== "string" || !device) continue;
+
+		setActionRef(action.id, action);
+		setActionDevice(action.id, device);
+
+		if (isCompositeOrSensor(action.id)) {
+			// Composite/sensor actions handle their own polling via onWillAppear;
+			// trigger a settings round-trip to re-invoke their poll logic.
+			await action.setSettings(s);
+			continue;
+		}
+
+		try {
+			const result = await hubitatService.pollDevice(settings.hostname, settings.access_token, device);
+			const state = getInstanceState(action.id);
+			if (state) {
+				state.switchState = result.switchState;
+				state.level = result.level;
+				await updateInstanceImage(action, state);
+				streamDeck.logger.info(`[reconnect] Updated action ${action.id} device=${device} switch=${result.switchState} level=${result.level}`);
+			}
+		} catch (err) {
+			streamDeck.logger.warn(`[reconnect] Failed to poll device ${device}: ${err}`);
+		}
+	}
+});
+
 // Handle messages from the Property Inspector (e.g., device list requests)
 streamDeck.ui.onSendToPlugin(async (ev: SendToPluginEvent<JsonValue, JsonObject>) => {
 	const message = ev.payload as { command?: string };

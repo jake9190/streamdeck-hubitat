@@ -9,10 +9,10 @@ import type { WeatherCurrentSettings } from "../types";
 import { hubitatService } from "../hubitat-service";
 import { getGlobalSettings, registerInstance, unregisterInstance, setActionRef, setActionDevice, setCompositeHandler } from "../plugin-state";
 
-/** Determine if it's daytime (6am–8pm local). */
+/** Determine if it's daytime (7am–7pm local). */
 function isDaytime(): boolean {
 	const h = new Date().getHours();
-	return h >= 6 && h < 20;
+	return h >= 7 && h < 19;
 }
 
 /** WeatherFlow Tempest condition string → emoji, with day/night variants. */
@@ -79,7 +79,7 @@ function hasActiveAlert(alertsJson: string): boolean {
 /** All attributes this composite action monitors. */
 const WATCHED_ATTRS = new Set([
 	"temperature", "humidity", "conditions",
-	"todayHighTemperature", "todayLowTemperature",
+	"todayHighTemperature", "tomorrowLowTemperature",
 	"nwsAlerts",
 ]);
 
@@ -153,17 +153,28 @@ export class WeatherCurrent extends SingletonAction<WeatherCurrentSettings> {
 		actionRef: { setTitle(title: string): Promise<void>; setImage(image: string): Promise<void> },
 		vals: Map<string, string>,
 	): Promise<void> {
-		const temp = vals.get("temperature") ?? "—";
-		const humidity = vals.get("humidity") ?? "—";
+		const temp       = vals.get("temperature") ?? "—";
+		const humidity   = vals.get("humidity") ?? "—";
 		const conditions = vals.get("conditions") ?? "";
-		const todayHi = vals.get("todayHighTemperature") ?? "—";
-		const todayLo = vals.get("todayLowTemperature") ?? "—";
+		const todayHi    = vals.get("todayHighTemperature") ?? "—";
+		const tomorrowLo = vals.get("tomorrowLowTemperature") ?? "—";
 		const alertsJson = vals.get("nwsAlerts") ?? "[]";
 
-		const night = !isDaytime();
-		const emoji = conditionEmoji(conditions, night);
-		const alert = hasActiveAlert(alertsJson) ? "🔴 " : "";
+		const night      = !isDaytime();
+		const emoji      = conditionEmoji(conditions, night);
+		const alert      = hasActiveAlert(alertsJson) ? "!" : "";
+		const emojiColor = hasActiveAlert(alertsJson) ? "red" : "white";
 
-		await actionRef.setTitle(`${alert}${emoji}\n${temp}° ${humidity}%\n\n↑${todayHi}°↓${todayLo}°`);
+		const size = 144;
+		const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+			<rect width="${size}" height="${size}" rx="12"/>
+			<text x="72" y="58" text-anchor="middle" font-size="50" fill="${emojiColor}">${emoji}${alert}</text>
+			<text x="72" y="90" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" fill="white" font-weight="bold">${temp}° ${humidity}%</text>
+			<text x="72" y="118" text-anchor="middle" font-family="Arial,sans-serif" font-size="26" fill="#f0f0f0">↑${todayHi}° ↓${tomorrowLo}°</text>
+		</svg>`;
+
+		const base64 = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+		await actionRef.setImage(base64);
+		await actionRef.setTitle("");
 	}
 }

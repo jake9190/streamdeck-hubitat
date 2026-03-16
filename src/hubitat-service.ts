@@ -26,11 +26,18 @@ class HubitatService {
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 	private intentionalClose = false;
+	private hasConnectedBefore = false;
 	private listeners: DeviceEventCallback[] = [];
+	private reconnectListeners: (() => void)[] = [];
 
 	/** Register a callback for device events from the Hubitat WebSocket. */
 	onDeviceEvent(callback: DeviceEventCallback): void {
 		this.listeners.push(callback);
+	}
+
+	/** Register a callback that fires when the WebSocket reconnects after a drop. */
+	onReconnect(callback: () => void): void {
+		this.reconnectListeners.push(callback);
 	}
 
 	/** Connect (or reconnect) to the Hubitat event socket. */
@@ -51,6 +58,13 @@ class HubitatService {
 				streamDeck.logger.info("HubitatService: WebSocket connected");
 				this.reconnectDelay = MIN_RECONNECT_DELAY;
 				this.resetHeartbeat();
+				if (this.hasConnectedBefore) {
+					streamDeck.logger.info("HubitatService: reconnected — firing reconnect listeners");
+					for (const listener of this.reconnectListeners) {
+						listener();
+					}
+				}
+				this.hasConnectedBefore = true;
 			});
 
 			this.ws.on("message", (raw: WebSocket.RawData) => {
