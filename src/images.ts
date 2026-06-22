@@ -23,15 +23,32 @@ export function getImageBase64(imageName: string): string {
 	}
 }
 
-/** Get the appropriate image name for a switch state. */
-export function getStateImage(switchState: string): string {
+/** Map a toggle switch type to its image name prefix. */
+function typePrefix(type?: string): string {
+	switch (type) {
+		case "fan":
+			return "fan";
+		case "audio":
+			return "audio";
+		case "camera":
+			return "camera";
+		case "printer":
+			return "printer";
+		default:
+			return "light";
+	}
+}
+
+/** Get the appropriate image name for a switch state and icon type. */
+export function getStateImage(switchState: string, type?: string): string {
+	const prefix = typePrefix(type);
 	switch (switchState) {
 		case "on":
-			return "light_green";
+			return `${prefix}_green`;
 		case "off":
-			return "light_red";
+			return `${prefix}_red`;
 		default:
-			return "light_gray";
+			return `${prefix}_gray`;
 	}
 }
 

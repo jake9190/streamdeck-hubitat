@@ -6,7 +6,7 @@ import {
 	WillAppearEvent,
 	WillDisappearEvent,
 } from "@elgato/streamdeck";
-import type { ToggleSwitchSettings } from "../types";
+import type { ToggleSwitchSettings, ToggleSwitchType } from "../types";
 import { getImageBase64, getStateImage, getLevelImage } from "../images";
 import { hubitatService } from "../hubitat-service";
 import { getGlobalSettings, getInstanceState, registerInstance, unregisterInstance, updateInstanceImage } from "../plugin-state";
@@ -16,12 +16,13 @@ export class ToggleSwitch extends SingletonAction<ToggleSwitchSettings> {
 
 	override async onWillAppear(ev: WillAppearEvent<ToggleSwitchSettings>): Promise<void> {
 		const settings = ev.payload.settings;
-		registerInstance(ev.action.id, { switchState: "unknown", level: 0 });
+		const iconType = settings.type ?? "light";
+		registerInstance(ev.action.id, { switchState: "unknown", level: 0, iconType });
 
 		if (settings.device) {
-			await this.pollAndUpdateImage(ev.action.id, settings.device, ev);
+			await this.pollAndUpdateImage(ev.action.id, settings.device, ev, iconType);
 		} else {
-			await ev.action.setImage(getImageBase64("light_gray"));
+			await ev.action.setImage(getImageBase64(getStateImage("unknown", iconType)));
 		}
 	}
 
@@ -30,8 +31,11 @@ export class ToggleSwitch extends SingletonAction<ToggleSwitchSettings> {
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ToggleSwitchSettings>): Promise<void> {
+		const iconType = ev.payload.settings.type ?? "light";
+		const state = getInstanceState(ev.action.id);
+		if (state) state.iconType = iconType;
 		if (ev.payload.settings.device) {
-			await this.pollAndUpdateImage(ev.action.id, ev.payload.settings.device, ev);
+			await this.pollAndUpdateImage(ev.action.id, ev.payload.settings.device, ev, iconType);
 		}
 	}
 
@@ -52,6 +56,7 @@ export class ToggleSwitch extends SingletonAction<ToggleSwitchSettings> {
 		actionId: string,
 		deviceId: string,
 		ev: { action: { setImage(image: string): Promise<void> } },
+		iconType: ToggleSwitchType = "light",
 	): Promise<void> {
 		const global = getGlobalSettings();
 		if (!global.hostname || !global.access_token) return;
@@ -62,10 +67,13 @@ export class ToggleSwitch extends SingletonAction<ToggleSwitchSettings> {
 
 		state.switchState = result.switchState;
 		state.level = result.level;
+		state.iconType = iconType;
 
-		const imageName = result.hasLevel
-			? getLevelImage(state.switchState, state.level)
-			: getStateImage(state.switchState);
+		const imageName = iconType !== "light"
+			? getStateImage(state.switchState, iconType)
+			: result.hasLevel
+				? getLevelImage(state.switchState, state.level)
+				: getStateImage(state.switchState);
 		await ev.action.setImage(getImageBase64(imageName));
 	}
 }

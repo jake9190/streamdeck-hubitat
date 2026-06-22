@@ -86,6 +86,8 @@ export async function updateInstanceImage(
 	let imageName: string;
 	if (state.shadeState != null) {
 		imageName = getShadeImage(state.shadeState);
+	} else if (state.iconType != null && state.iconType !== "light") {
+		imageName = getStateImage(state.switchState, state.iconType);
 	} else if (state.level > 0) {
 		imageName = getLevelImage(state.switchState, state.level);
 	} else {

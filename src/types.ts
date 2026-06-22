@@ -7,10 +7,14 @@ export interface GlobalSettings {
 	access_token: string;
 }
 
+/** Icon set used by the Toggle Switch action. */
+export type ToggleSwitchType = "light" | "fan" | "audio" | "camera" | "printer";
+
 /** Settings for the Toggle Switch action. */
 export interface ToggleSwitchSettings {
 	[key: string]: JsonValue;
 	device: string;
+	type?: ToggleSwitchType;
 }
 
 /** Settings for the Set Switch action. */
@@ -53,6 +57,7 @@ export interface InstanceState {
 	switchState: "on" | "off" | "unknown";
 	level: number;
 	shadeState?: "open" | "closed" | "partially open" | "opening" | "closing" | "unknown";
+	iconType?: ToggleSwitchType;
 }
 
 /** A device event received from Hubitat's WebSocket. */

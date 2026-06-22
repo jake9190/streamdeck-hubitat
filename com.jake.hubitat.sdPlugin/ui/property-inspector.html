@@ -47,6 +47,20 @@
 			</select>
 		</div>
 
+		<div id="toggleSwitchOptions" class="hidden">
+			<div class="field">
+				<label>Type</label>
+				<select id="toggleTypeSelect">
+					<option value="light">Lights</option>
+					<option value="fan">Fan</option>
+					<option value="audio">Audio</option>
+					<option value="camera">Camera</option>
+					<option value="printer">3D Printer</option>
+				</select>
+			</div>
+			<div class="hint">Choose the icon shown on the button. Press toggles the device on/off.</div>
+		</div>
+
 		<div id="setSwitchOptions" class="hidden">
 			<div class="field">
 				<label>Action</label>
@@ -218,6 +232,8 @@
 
 			actionSettings.attribute = document.getElementById('attributeSelect').value;
 
+			actionSettings.type = document.getElementById('toggleTypeSelect').value;
+
 			if (websocket && websocket.readyState === WebSocket.OPEN) {
 				const msg = {
 					event: "setSettings",
@@ -263,6 +279,10 @@
 			if (actionSettings.attribute) {
 				document.getElementById('attributeSelect').value = actionSettings.attribute;
 			}
+
+			if (actionSettings.type) {
+				document.getElementById('toggleTypeSelect').value = actionSettings.type;
+			}
 		}
 
 		// --- Event listeners for inputs ---
@@ -280,6 +300,7 @@
 		document.getElementById('levelSelect').addEventListener('change', saveActionSettings);
 		document.getElementById('startingLevelSelect').addEventListener('change', saveActionSettings);
 		document.getElementById('attributeSelect').addEventListener('change', saveActionSettings);
+		document.getElementById('toggleTypeSelect').addEventListener('change', saveActionSettings);
 
 		document.querySelectorAll('input[name="action"]').forEach(function(r) {
 			r.addEventListener('change', function() {
@@ -394,11 +415,13 @@
 		}
 
 		function showActionOptions(actionUUID) {
+			const t = document.getElementById("toggleSwitchOptions");
 			const s = document.getElementById("setSwitchOptions");
 			const m = document.getElementById("multiDimmerOptions");
 			const w = document.getElementById("windowShadeOptions");
 			const n = document.getElementById("sensorOptions");
 			const wx = document.getElementById("weatherOptions");
+			if (t) t.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.toggleswitch.action");
 			if (s) s.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.setswitch.action");
 			if (m) m.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.multidimmer.action");
 			if (w) w.classList.toggle("hidden", actionUUID !== "com.jake.hubitat.windowshade.action");
